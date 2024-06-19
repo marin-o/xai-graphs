@@ -1,0 +1,47 @@
+GlobalEventID
+MonthYear   |
+Day         | Ili opcionalno samo FractionDate
+SQLDATE     -- YYYYMMDD format when the event took place
+
+ActorXCode                
+ActorXName                
+ActorXCountryCode         
+ActorXEthnicCode          
+ActorXReligionXCode       
+ActorXTypeXCode           
+
+EventCode                 
+EventBaseCode             
+EventRootCode             
+QuadClass                 
+GoldsteinScale            
+NumMentions				  
+NumArticles               
+AvgTone                   
+
+Geographic codes?? Probably unneeded
+
+sho ako 2 eventi gi imaat istite akteri i deluva kako da e istiot event samo od dve strani
+
+SELECT 
+GlobalEventID, SQLDATE as EventDate, Actor1Code, 
+Actor2Code, Actor1Name, Actor2Name, Actor1CountryCode, Actor2CountryCode, 
+Actor1EthnicCode, Actor2EthnicCode, Actor1Religion1Code, Actor2Religion1Code,
+Actor1Type1Code, Actor2Type1Code, 
+Actor1Type2Code, Actor2Type2Code, 
+Actor1Type3Code, Actor2Type3Code, 
+EventCode, EventBaseCode, EventRootCode,
+QuadClass, GoldsteinScale,
+NumMentions, NumArticles, AvgTone
+FROM `gdelt-bq.gdeltv2.events` 
+
+WHERE Actor1Code is not null AND Actor2Code is not null AND
+Actor1CountryCode is not null AND Actor2CountryCode is not null AND
+Actor1Type1Code is not null AND Actor2Type1Code is not null AND
+QuadClass is not null AND GoldsteinScale is not null AND AvgTone is not null AND
+Actor1CountryCode != Actor2CountryCode AND
+SQLDATE >= 20100101
+
+ORDER BY SQLDATE ASC;
+
+NetworkX https://networkx.org/documentation/networkx-1.10/reference/introduction.html
