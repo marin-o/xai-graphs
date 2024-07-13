@@ -46,6 +46,5 @@ def show_graph(g):
 
     # labels
     nx.draw_networkx_labels(g, pos, font_size=7, font_family='sans-serif')
-
     plt.axis('off')
     plt.show()
