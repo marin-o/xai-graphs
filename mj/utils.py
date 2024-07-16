@@ -19,6 +19,9 @@ def filter_data(data: pd.DataFrame, end_date: str):
 def create_graph_for_month(data: pd.DataFrame, month: str):
     filtered_data = filter_data(data, month)
     g = nx.Graph()
+    with open('../data/processed_data/country_codes.txt', 'rb') as f:
+        for line in f:
+            g.add_node(line.decode('utf-8').strip())
     for _, row in filtered_data.iterrows():
         g.add_edge(row.iloc[1], row.iloc[2], weight=linear_combination(row))
     with open(f'../data/graphs/graph_{month}.pkl', 'wb') as f:
