@@ -1,9 +1,17 @@
+from collections import defaultdict
+
+import numpy as np
 import pandas as pd
 import networkx as nx
 import matplotlib.pyplot as plt
 import seaborn as sns
 from pandas.api.types import union_categoricals
 import pickle
+
+
+NODE2VEC_SEED = 1723123209
+
+
 
 
 def linear_combination(row: pd.Series) -> float:
@@ -51,3 +59,29 @@ def show_graph(g):
     nx.draw_networkx_labels(g, pos, font_size=7, font_family='sans-serif')
     plt.axis('off')
     plt.show()
+    
+
+def count_and_average_node_occurrences(nv_models, nodes):
+    # Dictionary that stores the counts of each node in each walk
+    node_counts = {node: defaultdict(list) for node in nodes}
+
+    # For each Node2Vec model (technically for each graph)
+    for model in nv_models:
+        walks = model.walks
+        for walk in walks:
+            start_node = walk[0]
+            # Count appearances of each node in walks starting with start_node
+            counts = defaultdict(int)
+            for node in walk[
+                        1:]:  # Skip the starting node since we don't care(and don't take into account) about looping relationships
+                counts[node] += 1
+
+            for node, count in counts.items():
+                node_counts[start_node][node].append(count)
+
+    averaged_counts = {node: {} for node in nodes}
+    for start_node, counts in node_counts.items():
+        for node, count_list in counts.items():
+            averaged_counts[start_node][node] = np.mean(count_list)
+
+    return averaged_counts
