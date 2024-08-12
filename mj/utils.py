@@ -6,6 +6,7 @@ import networkx as nx
 import matplotlib.pyplot as plt
 import seaborn as sns
 from pandas.api.types import union_categoricals
+from sklearn.preprocessing import MinMaxScaler
 import pickle
 
 
@@ -59,29 +60,67 @@ def show_graph(g):
     nx.draw_networkx_labels(g, pos, font_size=7, font_family='sans-serif')
     plt.axis('off')
     plt.show()
-    
 
-def count_and_average_node_occurrences(nv_models, nodes):
-    # Dictionary that stores the counts of each node in each walk
-    node_counts = {node: defaultdict(list) for node in nodes}
 
-    # For each Node2Vec model (technically for each graph)
-    for model in nv_models:
-        walks = model.walks
-        for walk in walks:
-            start_node = walk[0]
-            # Count appearances of each node in walks starting with start_node
-            counts = defaultdict(int)
-            for node in walk[
-                        1:]:  # Skip the starting node since we don't care(and don't take into account) about looping relationships
-                counts[node] += 1
+def count_and_average_node_occurrences(nv_models, nodes):  # deprecated, do not use, scheduled for removal
 
-            for node, count in counts.items():
-                node_counts[start_node][node].append(count)
+    # throw exception because it is not supposed to be used
+    raise Exception("This function is deprecated and scheduled for removal. Do not use it.")
 
-    averaged_counts = {node: {} for node in nodes}
-    for start_node, counts in node_counts.items():
-        for node, count_list in counts.items():
-            averaged_counts[start_node][node] = np.mean(count_list)
+    nodes_per_month = dict()
 
+    for i in range(len(nv_models)):
+        node_counts = defaultdict(defaultdict)
+        for node in nodes:
+            walks = [el for el in nv_models[i].walks if el[0] == node]
+            for walk in walks:
+                start_node = walk[0]
+                unique_nodes = set(walk[1:])
+                unique_nodes.discard(start_node)
+
+                for n in unique_nodes:
+                    if n not in node_counts[node]:
+                        node_counts[node][n] = 1
+                    else:
+                        node_counts[node][n] += 1
+            scaler = MinMaxScaler()
+            counts = list(node_counts[node].values())
+            if len(counts) == 0:
+                continue
+            # scaled_counts = scaler.fit_transform(np.array(counts).reshape(-1, 1))
+            # node_counts[node] = dict(zip(node_counts[node].keys(), scaled_counts))
+        nodes_per_month[i] = node_counts
+    return nodes_per_month
+    # counts = np.array(list(node_counts.values())).reshape(-1, 1)
+    # scaled_counts = scaler.fit_transform(counts)
+    # scaled_counts = scaled_counts.reshape(-1)
+    # node_counts = dict(zip(node_counts.keys(), scaled_counts))
+    # nodes_per_month[i] = node_counts
+
+
+def count_occurences(n_vecs, nodes, nodes_enc):
+    appearances_per_month = {}
+    months = [i for i in range(0, len(n_vecs))]
+    for m in months:
+        appearances_per_month[m] = None
+    for month, m_name in zip(n_vecs, months):
+        num_appearances = [[0 for _ in range(len(nodes_enc.keys()))] for _ in range(len(nodes_enc.keys()))]
+        for node in nodes:
+            walks = [el for el in month.walks if el[0] == node]
+            for walk in walks:
+                unique_nodes = set(walk)
+                for u_node in unique_nodes:
+                    num_appearances[nodes_enc[node]][nodes_enc[u_node]] += 1
+            num_appearances[nodes_enc[node]] = np.array(num_appearances[nodes_enc[node]]).reshape(-1, 1)
+            scaler = MinMaxScaler()
+            num_appearances[nodes_enc[node]] = scaler.fit_transform(num_appearances[nodes_enc[node]]).reshape(1, -1)[0]
+        appearances_per_month[m_name] = num_appearances
+    return appearances_per_month
+
+
+def average_counts(counts, nodes_enc):
+    averaged_counts = defaultdict(list)
+    for node in nodes_enc:
+        month_lists = [month[nodes_enc[node]] for month in counts.values()]
+        averaged_counts[node] = np.mean(month_lists, axis=0)
     return averaged_counts
