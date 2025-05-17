@@ -234,9 +234,9 @@ def create_train_test_objects(prefix, walk_length, num_walks, dimensions=64):
 
 def summary_evaluation_for_month_groups_ex_1(model: Any, target_graphs: List[nx.classes.graph.Graph], nv_models: List[List]) -> Dict:
     acc, prec, rec, f1 = [], [], [], []
-    nodes = target_graphs[0].nodes
     
     for ((j_model, f_model, m_model, a_model), target_graph) in zip(nv_models, target_graphs):
+        nodes = target_graph.nodes
         avg_vectors = dict()
         for node in nodes:
             avg_vector = []
@@ -283,7 +283,7 @@ def summary_evaluation_for_month_groups_ex_1(model: Any, target_graphs: List[nx.
         majority_undersampled = resample(majority_class,
                                          replace=False,
                                          n_samples=len(minority_class),
-                                         random_state=42)
+                                         random_state=NODE2VEC_SEED)
 
         balanced_data = pd.concat([majority_undersampled, minority_class])
         balanced_X = np.array(balanced_data['X'])
