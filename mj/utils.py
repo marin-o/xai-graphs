@@ -1,6 +1,7 @@
 from collections import defaultdict
 
 import numpy as np
+import os
 import pandas as pd
 import networkx as nx
 import matplotlib.pyplot as plt
@@ -25,16 +26,31 @@ def filter_data(data: pd.DataFrame, end_date: str):
     return filtered_data
 
 
-def create_graph_for_month(data: pd.DataFrame, month: str):
+def create_graph_for_month(data: pd.DataFrame, month: str, prefix: str = ''):
+    
     filtered_data = filter_data(data, month)
     g = nx.Graph()
-    with open('../data/processed_data/country_codes.txt', 'rb') as f:
+    
+    # Use absolute paths from project root
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+    
+    # Read country codes from absolute path
+    with open(os.path.join(project_root, 'data', 'processed_data', 'country_codes.txt'), 'rb') as f:
         for line in f:
             g.add_node(line.decode('utf-8').strip())
+            
     for _, row in filtered_data.iterrows():
         g.add_edge(row.iloc[1], row.iloc[2], weight=linear_combination(row))
-    with open(f'../data/graphs/graph_{month}.pkl', 'wb') as f:
+    
+    # Save graph using absolute path
+    graphs_dir = os.path.join(project_root, 'data', 'graphs')
+    os.makedirs(graphs_dir, exist_ok=True)  # Create directory if it doesn't exist
+    
+    filename = f"{prefix + '_' if len(prefix)>0 else ''}graph_{month}.pkl"
+    with open(os.path.join(graphs_dir, filename), 'wb') as f:
         pickle.dump(g, f)
+    
+    return g
 
 
 def show_graph(g):
