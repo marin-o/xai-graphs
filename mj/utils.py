@@ -13,6 +13,8 @@ from sklearn.utils import resample
 from typing import Any, List, Dict
 import pickle
 
+from node2vec import Node2Vec
+
 
 NODE2VEC_SEED = 1723123209
 
@@ -217,20 +219,24 @@ def create_train_test_objects(prefix, walk_length, num_walks, dimensions=64):
             workers=4,
             seed=NODE2VEC_SEED  # Use consistent seed for reproducibility
         )
-        
+
+        # Train the Node2Vec model
+        word2vec = node2vec.fit(window=10, min_count=1, batch_words=4)        
         # Store in dictionary using just the date as key
         print(f"Processing graph for date: {date_key}")
         graphs_and_node2vecs[date_key] = {
             'graph': graph,
-            'node2vec': node2vec
+            'word2vec': word2vec
         }
         
     return graphs_and_node2vecs
 
 
-def summary_evaluation_for_month_groups_ex_1(model: Any, t_graph: List[nx.classes.graph.Graph], nv_models: List[List], nodes) -> Dict:
+def summary_evaluation_for_month_groups_ex_1(model: Any, target_graphs: List[nx.classes.graph.Graph], nv_models: List[List]) -> Dict:
     acc, prec, rec, f1 = [], [], [], []
-    for ((j_model, f_model, m_model, a_model), target_graph) in zip(nv_models, t_graph):
+    nodes = target_graphs[0].nodes
+    
+    for ((j_model, f_model, m_model, a_model), target_graph) in zip(nv_models, target_graphs):
         avg_vectors = dict()
         for node in nodes:
             avg_vector = []
@@ -249,7 +255,7 @@ def summary_evaluation_for_month_groups_ex_1(model: Any, t_graph: List[nx.classe
                     n_sorted = sorted([node1, node2])
                     dot_products[f'{n_sorted[0]}-{n_sorted[1]}'] = np.dot(vector1, vector2)
 
-        nodes = target_graph.nodes
+        
         ds_dict = dict()
 
         for node1 in nodes:
@@ -270,6 +276,9 @@ def summary_evaluation_for_month_groups_ex_1(model: Any, t_graph: List[nx.classe
 
         majority_class = data[data['y'] == 0]
         minority_class = data[data['y'] == 1]
+
+        print(f"Majority class size: {len(majority_class)},\nMinority class size: {len(minority_class)}")
+
 
         majority_undersampled = resample(majority_class,
                                          replace=False,
