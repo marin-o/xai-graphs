@@ -8,6 +8,9 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from pandas.api.types import union_categoricals
 from sklearn.preprocessing import MinMaxScaler
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
+from sklearn.utils import resample
+from typing import Any, List, Dict
 import pickle
 
 
@@ -140,3 +143,66 @@ def average_counts(counts, nodes_enc):
         month_lists = [month[nodes_enc[node]] for month in counts.values()]
         averaged_counts[node] = np.mean(month_lists, axis=0)
     return averaged_counts
+
+
+def summary_evaluation_for_month_groups_ex_1(model: Any, t_graph: List[nx.classes.graph.Graph], nv_models: List[List], nodes) -> Dict:
+    acc, prec, rec, f1 = [], [], [], []
+    for ((j_model, f_model, m_model, a_model), target_graph) in zip(nv_models, t_graph):
+        avg_vectors = dict()
+        for node in nodes:
+            avg_vector = []
+            for i in range(64):
+                avg_vector.append(
+                    (j_model.wv[node][i] + f_model.wv[node][i] + m_model.wv[node][i] + a_model.wv[node][i]) / 4)
+            avg_vectors[node] = avg_vector
+
+        dot_products = dict()
+
+        for node1 in avg_vectors:
+            for node2 in avg_vectors:
+                if node1 != node2:
+                    vector1 = np.array(avg_vectors[node1])
+                    vector2 = np.array(avg_vectors[node2])
+                    n_sorted = sorted([node1, node2])
+                    dot_products[f'{n_sorted[0]}-{n_sorted[1]}'] = np.dot(vector1, vector2)
+
+        nodes = target_graph.nodes
+        ds_dict = dict()
+
+        for node1 in nodes:
+            for node2 in nodes:
+                if node1 != node2:
+                    n_sorted = sorted([node1, node2])
+                    ds_dict[f'{n_sorted[0]}-{n_sorted[1]}'] = (0, dot_products[f'{n_sorted[0]}-{n_sorted[1]}'])
+        for el in target_graph.edges(data=True):
+            if el[2]['weight'] >= 0:
+                node1 = el[0]
+                node2 = el[1]
+                n_sorted = sorted([node1, node2])
+                ds_dict[f'{n_sorted[0]}-{n_sorted[1]}'] = (1, dot_products[f'{n_sorted[0]}-{n_sorted[1]}'])
+
+        X = [el[1] for el in ds_dict.values()]
+        y = [el[0] for el in ds_dict.values()]
+        data = pd.DataFrame({'X': X, 'y': y})
+
+        majority_class = data[data['y'] == 0]
+        minority_class = data[data['y'] == 1]
+
+        majority_undersampled = resample(majority_class,
+                                         replace=False,
+                                         n_samples=len(minority_class),
+                                         random_state=42)
+
+        balanced_data = pd.concat([majority_undersampled, minority_class])
+        balanced_X = np.array(balanced_data['X'])
+        balanced_y = np.array(balanced_data['y'])
+
+        predictions = model.predict(balanced_X.reshape(-1, 1))
+
+        acc.append(accuracy_score(balanced_y, predictions))
+        prec.append(precision_score(balanced_y, predictions))
+        rec.append(recall_score(balanced_y, predictions))
+        f1.append(f1_score(balanced_y, predictions))
+
+    return {"mean_acc": np.array(acc).mean(), "mean_prec": np.array(prec).mean(),
+            "mean_rec": np.array(rec).mean(), "mean_f1": np.array(f1).mean(), "all_metrics": [acc, prec, rec, f1]}
