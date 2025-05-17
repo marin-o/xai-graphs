@@ -146,6 +146,37 @@ def average_counts(counts, nodes_enc):
 
 
 def create_train_test_objects(prefix, walk_length, num_walks, dimensions=64):
+    """
+    Creates graph and Node2Vec objects for training and testing from stored graph files.
+    This function loads graph pickle files matching a given prefix, sorts them by date,
+    and creates Node2Vec models for each graph. The graphs and models are stored in a
+    dictionary keyed by date for subsequent use in temporal graph analysis.
+    Parameters
+    ----------
+    prefix : str
+        Prefix to filter graph files (e.g., 'graph_btc' will match 'graph_btc_20230101.pkl')
+    walk_length : int
+        Length of random walks for Node2Vec
+    num_walks : int
+        Number of random walks per node for Node2Vec
+    dimensions : int, optional
+        Dimensionality of the node embeddings (default: 64)
+    Returns
+    -------
+    dict
+        Dictionary with date keys containing both the graph and corresponding Node2Vec object
+        Format: {
+            'date1': {'graph': networkx_graph1, 'node2vec': node2vec_model1},
+            'date2': {'graph': networkx_graph2, 'node2vec': node2vec_model2},
+            ...
+    Example
+    -------
+    >>> graphs_data = create_train_test_objects('israel_palestine', walk_length=10, num_walks=80)
+    >>> print(f"Loaded {len(graphs_data)} graphs")
+    >>> # Access a specific date's graph and node2vec model
+    >>> graph = graphs_data['2023_01_01']['graph']
+    >>> node2vec_model = graphs_data['2023_01_01']['node2vec']
+    """
     # Load the graphs
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
     graphs_dir = os.path.join(project_root, 'data', 'graphs')
