@@ -9,6 +9,7 @@ import seaborn as sns
 from pandas.api.types import union_categoricals
 from sklearn.preprocessing import MinMaxScaler
 import pickle
+from node2vec import Node2Vec
 
 
 NODE2VEC_SEED = 1723123209
@@ -26,7 +27,7 @@ def filter_data(data: pd.DataFrame, end_date: str):
     return filtered_data
 
 
-def create_graph_for_month(data: pd.DataFrame, month: str, prefix: str = ''):
+def create_graph_for_month(data: pd.DataFrame, month: str, prefix: str = '', save=True):
     
     filtered_data = filter_data(data, month)
     g = nx.Graph()
@@ -46,10 +47,12 @@ def create_graph_for_month(data: pd.DataFrame, month: str, prefix: str = ''):
     graphs_dir = os.path.join(project_root, 'data', 'graphs')
     os.makedirs(graphs_dir, exist_ok=True)  # Create directory if it doesn't exist
     
-    filename = f"{prefix + '_' if len(prefix)>0 else ''}graph_{month}.pkl"
-    with open(os.path.join(graphs_dir, filename), 'wb') as f:
-        pickle.dump(g, f)
-    
+    # Save the graph as a pickle file
+    if save:
+        filename = f"{prefix + '_' if len(prefix)>0 else ''}graph_{month}.pkl"
+        with open(os.path.join(graphs_dir, filename), 'wb') as f:
+            pickle.dump(g, f)
+
     return g
 
 
@@ -140,3 +143,55 @@ def average_counts(counts, nodes_enc):
         month_lists = [month[nodes_enc[node]] for month in counts.values()]
         averaged_counts[node] = np.mean(month_lists, axis=0)
     return averaged_counts
+
+
+def create_train_test_objects(prefix, walk_length, num_walks, dimensions=64):
+    # Load the graphs
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+    graphs_dir = os.path.join(project_root, 'data', 'graphs')
+    
+    # Filter graph files that match the prefix
+    graph_files = [f for f in os.listdir(graphs_dir) if f.endswith('.pkl') and f.startswith(prefix)]
+    
+    # Extract date parts from filenames
+    date_parts = []
+    for filename in graph_files:
+        # Remove .pkl extension
+        name_without_ext = filename[:-4]
+        
+        # Extract the date part which should be after "graph_"
+        if "graph_" in name_without_ext:
+            # The date part is everything after the "graph_" substring
+            date_key = name_without_ext.split("graph_")[1]
+            date_parts.append((date_key, filename))
+    
+    # Sort files by date
+    sorted_data = sorted(date_parts, key=lambda x: x[0])
+    
+    # Process each graph in order
+    graphs_and_node2vecs = {}
+    for date_key, file in sorted_data:
+        # Load graph
+        with open(os.path.join(graphs_dir, file), 'rb') as f:
+            graph = pickle.load(f)
+        
+        # Create Node2Vec model
+        node2vec = Node2Vec(
+            graph, 
+            dimensions=dimensions, 
+            walk_length=walk_length, 
+            num_walks=num_walks, 
+            workers=4,
+            seed=NODE2VEC_SEED  # Use consistent seed for reproducibility
+        )
+        
+        # Store in dictionary using just the date as key
+        print(f"Processing graph for date: {date_key}")
+        graphs_and_node2vecs[date_key] = {
+            'graph': graph,
+            'node2vec': node2vec
+        }
+        
+    return graphs_and_node2vecs
+
+
