@@ -299,3 +299,138 @@ def summary_evaluation_for_month_groups_ex_1(model: Any, target_graphs: List[nx.
     return {"mean_acc": np.array(acc).mean(), "mean_prec": np.array(prec).mean(),
             "mean_rec": np.array(rec).mean(), "mean_f1": np.array(f1).mean(), "all_metrics": [acc, prec, rec, f1]}
 
+
+def summary_evaluation_for_month_groups_ex_5(model: Any, target_graphs: List[nx.classes.graph.Graph], nv_models: List[List]) -> Dict:
+    acc, prec, rec, f1 = [], [], [], []
+
+    for ((j_model, f_model, m_model, a_model), target_graph) in zip(nv_models, target_graphs):
+        avg_vectors = dict()
+        nodes = target_graph.nodes
+
+        for node in nodes:
+            avg_vector = []
+            for i in range(64):
+                avg_vector.append(
+                    (j_model.wv[node][i] + f_model.wv[node][i] + m_model.wv[node][i] + a_model.wv[node][i]) / 4)
+            avg_vectors[node] = avg_vector
+
+        ds_dict = dict()
+        for node1 in nodes:
+            for node2 in nodes:
+                if node1 != node2:
+                    n_sorted = sorted([node1, node2])
+                    ds_dict[f'{n_sorted[0]}-{n_sorted[1]}'] = (
+                        0, np.concatenate([avg_vectors[n_sorted[0]], avg_vectors[n_sorted[1]]]))
+        for el in target_graph.edges(data=True):
+            if el[2]['weight'] >= 0:
+                node1 = el[0]
+                node2 = el[1]
+                n_sorted = sorted([node1, node2])
+                ds_dict[f'{n_sorted[0]}-{n_sorted[1]}'] = (
+                    1, np.concatenate([avg_vectors[n_sorted[0]], avg_vectors[n_sorted[1]]]))
+
+        X = [el[1] for el in ds_dict.values()]
+        y = [el[0] for el in ds_dict.values()]
+        data = pd.DataFrame({'X': X, 'y': y})
+
+        majority_class = data[data['y'] == 0]
+        minority_class = data[data['y'] == 1]
+
+        majority_undersampled = resample(majority_class,
+                                         replace=False,
+                                         n_samples=len(minority_class),
+                                         random_state=42)
+
+        balanced_data = pd.concat([majority_undersampled, minority_class])
+        balanced_X = np.array(balanced_data['X'].tolist())
+        balanced_y = np.array(balanced_data['y'])
+
+        predictions = model.predict(balanced_X)
+
+        acc.append(accuracy_score(balanced_y, predictions))
+        prec.append(precision_score(balanced_y, predictions))
+        rec.append(recall_score(balanced_y, predictions))
+        f1.append(f1_score(balanced_y, predictions))
+
+    return {"mean_acc": np.array(acc).mean(), "mean_prec": np.array(prec).mean(),
+            "mean_rec": np.array(rec).mean(), "mean_f1": np.array(f1).mean(), "all_metrics": [acc, prec, rec, f1]}
+
+
+def summary_evaluation_for_month_groups_ex_6(model: Any, target_graphs: List[nx.classes.graph.Graph], nv_models: List[List]) -> Dict:
+    acc, prec, rec, f1 = [], [], [], []
+
+    for ((j_model, f_model, m_model, a_model), target_graph) in zip(nv_models, target_graphs):
+        images = dict()
+        nodes = target_graph.nodes
+
+        current_group_nv_models = [j_model, f_model, m_model, a_model]
+
+        for node1 in nodes:
+            for node2 in nodes:
+                if node1 != node2:
+                    n_sorted = sorted([node1, node2])
+                    key = f'{n_sorted[0]}-{n_sorted[1]}'
+                    ds = pd.DataFrame()
+                    vectors = []
+                    for i in range(len(nv_models)):
+                        vectors.append(current_group_nv_models[i].wv[node1])
+                        vectors.append(current_group_nv_models[i].wv[node2])
+                    img = np.stack(tuple(vectors), axis=0)
+                    normalized_img = (img + 1) / 2
+                    scaled_img = (normalized_img * 255).astype(np.uint8)
+                    rgb_img = None
+                    if scaled_img.ndim == 2:
+                        rgb_img = np.stack([scaled_img] * 3, axis=-1)
+                    else:
+                        rgb_img = scaled_img
+                    images[key] = rgb_img
+
+        ds_dict = dict()
+        for node1 in nodes:
+            for node2 in nodes:
+                if node1 != node2:
+                    n_sorted = sorted([node1, node2])
+                    ds_dict[f'{n_sorted[0]}-{n_sorted[1]}'] = 0
+        for el in target_graph.edges(data=True):
+            if el[2]['weight'] > 0:
+                node1 = el[0]
+                node2 = el[1]
+                n_sorted = sorted([node1, node2])
+                ds_dict[f'{n_sorted[0]}-{n_sorted[1]}'] = 1
+        all_images = []
+        all_labels = []
+        for key in ds_dict.keys():
+            all_labels.append(ds_dict[key])
+            all_images.append(images[key])
+
+        print(len(all_labels) == len(all_images))
+
+        all_images = np.array(all_images)
+        all_labels = np.array(all_labels)
+
+        data = pd.DataFrame({'img': list(all_images), 'target': all_labels})
+
+        majority_class = data[data['target'] == 0]
+        minority_class = data[data['target'] == 1]
+
+        majority_undersampled = resample(majority_class,
+                                         replace=False,
+                                         n_samples=len(minority_class),
+                                         random_state=42)
+
+        balanced_data = pd.concat([majority_undersampled, minority_class])
+        balanced_images = np.array(balanced_data['img'].tolist())
+        balanced_labels = np.array(balanced_data['target'])
+        test_loss, test_acc = model.evaluate(balanced_images, balanced_labels)
+
+        print(f"Test Accuracy: {test_acc * 100:.2f}%")
+        y_pred_probs = model.predict(balanced_images)
+        predictions = np.argmax(y_pred_probs, axis=1)
+
+        acc.append(accuracy_score(balanced_labels, predictions))
+        prec.append(precision_score(balanced_labels, predictions))
+        rec.append(recall_score(balanced_labels, predictions))
+        f1.append(f1_score(balanced_labels, predictions))
+
+    return {"mean_acc": np.array(acc).mean(), "mean_prec": np.array(prec).mean(),
+            "mean_rec": np.array(rec).mean(), "mean_f1": np.array(f1).mean(), "all_metrics": [acc, prec, rec, f1]}
