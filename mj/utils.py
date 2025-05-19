@@ -372,7 +372,7 @@ def summary_evaluation_for_month_groups_ex_6(model: Any, target_graphs: List[nx.
                     key = f'{n_sorted[0]}-{n_sorted[1]}'
                     ds = pd.DataFrame()
                     vectors = []
-                    for i in range(len(nv_models)):
+                    for i in range(len(current_group_nv_models)):
                         vectors.append(current_group_nv_models[i].wv[node1])
                         vectors.append(current_group_nv_models[i].wv[node2])
                     img = np.stack(tuple(vectors), axis=0)
@@ -410,6 +410,8 @@ def summary_evaluation_for_month_groups_ex_6(model: Any, target_graphs: List[nx.
 
         data = pd.DataFrame({'img': list(all_images), 'target': all_labels})
 
+        print(all_images[0].shape)
+
         majority_class = data[data['target'] == 0]
         minority_class = data[data['target'] == 1]
 
@@ -421,6 +423,9 @@ def summary_evaluation_for_month_groups_ex_6(model: Any, target_graphs: List[nx.
         balanced_data = pd.concat([majority_undersampled, minority_class])
         balanced_images = np.array(balanced_data['img'].tolist())
         balanced_labels = np.array(balanced_data['target'])
+
+        print(balanced_images.shape)
+
         test_loss, test_acc = model.evaluate(balanced_images, balanced_labels)
 
         print(f"Test Accuracy: {test_acc * 100:.2f}%")
