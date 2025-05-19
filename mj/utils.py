@@ -405,11 +405,112 @@ def summary_evaluation_for_month_groups_ex_2(model, target_graphs, wv_models, n_
     return {"mean_acc": np.array(acc).mean(), "mean_prec": np.array(prec).mean(),
             "mean_rec": np.array(rec).mean(), "mean_f1": np.array(f1).mean(), "all_metrics": [acc, prec, rec, f1]}
 
-# def cosine_similarity(vec1, vec2):
-#     dot_product = np.dot(vec1, vec2)
-#     norm_vec1 = np.linalg.norm(vec1)
-#     norm_vec2 = np.linalg.norm(vec2)
-#     return dot_product / (norm_vec1 * norm_vec2)
+def summary_evaluation_for_month_groups_ex_3(model: Any, target_graphs: List[nx.classes.graph.Graph], wv_models: List[List], n_vecs: List) -> Dict:
+    acc, prec, rec, f1 = [], [], [], []
+    
+    # Get nodes from the first graph and create node-to-index mapping
+    nodes = target_graphs[0].nodes
+    nodes_enc = {node: idx for idx, node in enumerate(nodes)}
+    
+    for i, (models, target_graph) in enumerate(zip(wv_models, target_graphs)):
+        # Compute co-occurrence counts and average them
+        counts = count_occurences(n_vecs[i], nodes, nodes_enc)
+        averaged_counts = average_counts(counts, nodes_enc)
+        for node in nodes_enc:
+            month_lists = [month[nodes_enc[node]] for month in counts.values()]
+            averaged_counts[node] = np.mean(month_lists, axis=0)
+        
+        # Initialize dictionary for weighted dot products per month
+        dot_products_per_month_weighted = {}
+        
+        # Compute weighted dot products for each model/month
+        for month_idx, model in enumerate(models):
+            vectors = {node: model.wv[node] for node in nodes}
+            dot_products = {}
+            for node1 in vectors:
+                for node2 in vectors:
+                    if node1 != node2:
+                        n_sorted = sorted([node1, node2])
+                        pair_key = f'{n_sorted[0]}-{n_sorted[1]}'
+                        vector1 = np.array(vectors[node1]) * counts[month_idx][nodes_enc[n_sorted[0]]][nodes_enc[n_sorted[1]]]
+                        vector2 = np.array(vectors[node2]) * counts[month_idx][nodes_enc[n_sorted[1]]][nodes_enc[n_sorted[0]]]
+                        dot_products[pair_key] = np.dot(vector1, vector2)
+            dot_products_per_month_weighted[month_idx] = dot_products
+        
+        # Get all unique pair keys from all months
+        all_pairs = set()
+        for month_idx in range(len(models)):
+            all_pairs.update(dot_products_per_month_weighted[month_idx].keys())
+        
+        # Compute predictions by averaging weighted dot products across months
+        predictions = {}
+        for pair in all_pairs:
+            prediction = 0
+            count = 0
+            for month_idx in range(len(models)):
+                if pair in dot_products_per_month_weighted[month_idx]:
+                    prediction += dot_products_per_month_weighted[month_idx][pair]
+                    count += 1
+            predictions[pair] = (prediction / count) if count > 0 else 0
+        
+        # Create dataset dictionary
+        ds_dict = {}
+        for node1 in nodes:
+            for node2 in nodes:
+                if node1 != node2:
+                    n_sorted = sorted([node1, node2])
+                    pair_key = f'{n_sorted[0]}-{n_sorted[1]}'
+                    if pair_key in predictions:
+                        ds_dict[pair_key] = (0, predictions[pair_key])  # Initialize as no edge
+        
+        # Update with positive edges
+        for el in target_graph.edges(data=True):
+            if el[2]['weight'] > 0:  # Match original code's condition
+                node1 = el[0]
+                node2 = el[1]
+                n_sorted = sorted([node1, node2])
+                pair_key = f'{n_sorted[0]}-{n_sorted[1]}'
+                if pair_key in predictions:
+                    ds_dict[pair_key] = (1, predictions[pair_key])  # Set as having an edge
+        
+        # Create dataset
+        X = [el[1] for el in ds_dict.values()]
+        y = [el[0] for el in ds_dict.values()]
+        data = pd.DataFrame({'X': X, 'y': y})
+        
+        # Balance the dataset
+        majority_class = data[data['y'] == 0]
+        minority_class = data[data['y'] == 1]
+        
+        print(f"Majority class size: {len(majority_class)},\nMinority class size: {len(minority_class)}")
+        
+        majority_undersampled = resample(
+            majority_class,
+            replace=False,
+            n_samples=len(minority_class),
+            random_state=42
+        )
+        
+        balanced_data = pd.concat([majority_undersampled, minority_class])
+        balanced_X = np.array(balanced_data['X']).reshape(-1, 1)
+        balanced_y = np.array(balanced_data['y'])
+        
+        # Make predictions
+        predictions_model = model.predict(balanced_X)
+        
+        # Compute metrics
+        acc.append(accuracy_score(balanced_y, predictions_model))
+        prec.append(precision_score(balanced_y, predictions_model))
+        rec.append(recall_score(balanced_y, predictions_model))
+        f1.append(f1_score(balanced_y, predictions_model))
+    
+    return {
+        "mean_acc": np.array(acc).mean(),
+        "mean_prec": np.array(prec).mean(),
+        "mean_rec": np.array(rec).mean(),
+        "mean_f1": np.array(f1).mean(),
+        "all_metrics": [acc, prec, rec, f1]
+    }
 
 from sklearn.metrics.pairwise import cosine_similarity
 
